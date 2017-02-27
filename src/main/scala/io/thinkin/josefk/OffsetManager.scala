@@ -3,13 +3,12 @@ package io.thinkin.josefk
 import java.util.Properties
 
 import kafka.admin.AdminClient
-import org.apache.kafka.clients.consumer.{ConsumerConfig, InvalidOffsetException, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.consumer.{ConsumerConfig, InvalidOffsetException, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 
 import scala.collection.JavaConversions._
-import scala.collection.immutable.Iterable
 import scala.util.{Failure, Success, Try}
 
 trait OffsetManager {
@@ -128,8 +127,6 @@ class DefaultOffsetManager(group: String, bootstrapServers: String) extends Offs
           case (_, Failure(e: InvalidOffsetException)) => None
           case (_, Failure(e)) => throw e
         }.toMap
-
-      println(s"Setting: ${offsetByTopicPartition}")
 
       consumer.commitSync(offsetByTopicPartition)
 

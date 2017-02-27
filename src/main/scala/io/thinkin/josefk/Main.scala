@@ -1,5 +1,9 @@
 package io.thinkin.josefk
 
+import org.apache.kafka.common.TopicPartition
+
+import scala.util.{Failure, Success, Try}
+
 sealed trait Mode
 
 case object Beginning extends Mode
@@ -50,7 +54,7 @@ object Main {
 
     arg[String]("<group>").required().maxOccurs(1).action((x, c) => c.copy(consumerGroup = x))
     arg[String]("<mapping>...")
-    .text("each entry has one of the forms: <topic>, <topic:partition>, <topic:partition:offset> (only mapping mode)")
+    .text("each entry has one of the forms: <topic> (beginning/end modes), <topic:partition:offset> (only mapping mode)")
     .required()
     .unbounded()
     .action((x, c) => c.copy(mappings = c.mappings :+ x))
@@ -70,7 +74,22 @@ object Main {
         m.setToBeginningByTopic(config.mappings:_*)
       case End =>
         m.setToEndByTopic(config.mappings:_*)
-      case Mapping => ???
+      case Mapping =>
+        val parsedMappings:Seq[(TopicPartition, Long)] = config.mappings.map { mapping =>
+          val mappingValues = mapping.split(":")
+          if (mappingValues.length != 3)
+            throw new IllegalArgumentException(
+              s"The string '${mapping}' is not a valid mapping, expected form: '<topic>:<partition>:<offset>'")
+          (for {
+            partition:Int <- Try(mappingValues(1).toInt)
+            offset:Long <- Try(mappingValues(2).toLong)
+          } yield new TopicPartition(mappingValues(0), partition) -> offset) match {
+            case Success(v) => v
+            case Failure(e) => throw new IllegalArgumentException(
+              s"In the string '${mapping}' either partition or offset is not a parsable integer value")
+          }
+        }
+        m.setTo(parsedMappings:_*)
     }
   }
 }
