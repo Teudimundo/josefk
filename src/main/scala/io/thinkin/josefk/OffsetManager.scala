@@ -193,7 +193,7 @@ class DefaultOffsetManager(group: String, bootstrapServers: String) extends Offs
           .filter { case (_, assignment) => topics.contains(assignment.topic) }
           .map{case (client, assignment) => s"(${assignment.topic}::${assignment.partition} -> $client)"}
 
-        if ( !connectedOnSameTopic.nonEmpty ) {
+        if ( connectedOnSameTopic.nonEmpty ) {
           throw UnassignedPartition(
             s"Group ${group} in state '${
               description
