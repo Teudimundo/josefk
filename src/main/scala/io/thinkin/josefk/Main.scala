@@ -40,7 +40,7 @@ object Main {
     scopt.Read.reads(s => Modes.from(s).getOrElse(throw new IllegalArgumentException(s"Invalid mode: ${s}")))
 
   val parser = new scopt.OptionParser[Config]("josefk") {
-    head("josefk", "0.(0)1")
+    head("josefk", "0.01")
 
     opt[String]('s', "boostrapServer").maxOccurs(1).required().action(
       (x, c) =>
@@ -53,6 +53,7 @@ object Main {
         c.copy(mode = x)).text("Offset reset mode: 'beginning'(default), 'end', 'mapping'")
 
     arg[String]("<group>").required().maxOccurs(1).action((x, c) => c.copy(consumerGroup = x))
+
     arg[String]("<mapping>...")
     .text("each entry has one of the forms: <topic> (beginning/end modes), <topic:partition:offset> (only mapping mode)")
     .required()

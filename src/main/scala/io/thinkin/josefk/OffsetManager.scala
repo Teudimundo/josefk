@@ -1,13 +1,17 @@
 package io.thinkin.josefk
 
+import java.nio.ByteBuffer
 import java.util.Properties
 
 import kafka.admin.AdminClient
+import kafka.coordinator.MemberSummary
 import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.clients.consumer.{ConsumerConfig, InvalidOffsetException, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 
+import scala.collection.JavaConverters._
 import scala.collection.JavaConversions._
 import scala.util.{Failure, Success, Try}
 
@@ -162,7 +166,7 @@ class DefaultOffsetManager(group: String, bootstrapServers: String) extends Offs
   private def consumerSubscribedOnTopics(topics: Set[String]): KafkaConsumer[Array[Byte], Array[Byte]]
 
   = {
-    checkGroupStateEmpty
+    checkGroupStateEmpty(topics)
     val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](
       props,
       new ByteArrayDeserializer,
@@ -171,19 +175,31 @@ class DefaultOffsetManager(group: String, bootstrapServers: String) extends Offs
 
   }
 
-  private def checkGroupStateEmpty(): Unit
+  private def retrieveAssignment(member: MemberSummary): List[TopicPartition] = {
+    val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
+    assignment.partitions.asScala.toList
+  }
+
+  private def checkGroupStateEmpty(topics: Set[String]): Unit
 
   = {
     val a = AdminClient.create(props)
     try {
       val description = a.describeGroup(group)
       if (description.state != "Empty" && description.state != "Dead") {
-        val connected = description.members.map(m => s"${m.clientHost}:${m.clientId}")
-        throw UnassignedPartition(
-          s"Group ${group} in state '${
-            description
-            .state
-          }', check whether is connected to any topic clientIds: $connected")
+        val connectedOnSameTopic =
+          description.members
+          .flatMap(m => retrieveAssignment(m).map(s"${m.clientHost}:${m.clientId}" -> _))
+          .filter { case (_, assignment) => topics.contains(assignment.topic) }
+          .map{case (client, assignment) => s"(${assignment.topic}::${assignment.partition} -> $client)"}
+
+        if ( !connectedOnSameTopic.nonEmpty ) {
+          throw UnassignedPartition(
+            s"Group ${group} in state '${
+              description
+              .state
+            }', check whether is connected to any topic clientIds: $connectedOnSameTopic")
+        }
       }
     } finally {
       a.close()
